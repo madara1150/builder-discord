@@ -1,0 +1,21 @@
+{
+  "name": "builder-discord",
+  "version": "1.0.0",
+  "description": "Discord shop server bot with automated channel and 10-level role setup, activity logging, SoundCloud music, and moderation commands.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "preview": "node src/setup.js --dry-run",
+    "setup": "node --env-file=.env src/setup.js",
+    "start": "node --env-file=.env src/bot.js"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.28.0",
+    "ffmpeg-static": "^5.3.0",
+    "soundcloud.ts": "^0.7.4"
+  }
+}
