@@ -1,65 +1,23 @@
-// สร้าง/อัปเดตห้องตาม layout.js รันซ้ำได้ และไม่ลบห้องเดิมของเซิร์ฟเวอร์
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import {
-  ChannelType,
-  Client,
-  GatewayIntentBits,
-  OAuth2Scopes,
-  PermissionFlagsBits as P,
-} from 'discord.js';
-import { EVERYONE_PERMISSIONS, LAYOUT, ROLE_LEVELS } from './layout.js';
+// สร้าง/อัปเดตยศและห้องตามเทมเพลต รันซ้ำได้ และไม่ลบห้องเดิมของเซิร์ฟเวอร์
+// เลือกเทมเพลตด้วย --template=<id> (ค่าเริ่มต้น shop)
+import { existsSync, writeFileSync } from 'node:fs';
+import { Client, GatewayIntentBits, OAuth2Scopes } from 'discord.js';
+import { applyPlan, planTemplate } from './builder.js';
+import { EVERYONE_PERMISSIONS, ROLE_LEVELS } from './layout.js';
 import { assignMissingLevel } from './roles.js';
+import { channels } from './store.js';
+import { TEMPLATES, findTemplate } from './templates.js';
+import { ensureTicketPanel } from './tickets.js';
 
-const CHANNELS_FILE = new URL('../channels.json', import.meta.url);
 const EVERYONE_BACKUP_FILE = new URL('../everyone-backup.txt', import.meta.url);
 
 // บอทกำหนดให้ยศได้เฉพาะสิทธิ์ที่ตัวเองมี จึงต้องมีสิทธิ์ครบตามยศสูงสุด แต่ไม่ใช้ Administrator
 const BOT_PERMISSIONS = [...new Set([...EVERYONE_PERMISSIONS, ...ROLE_LEVELS[0].permissions])];
 
-const BOT_CHANNEL_ALLOW = [P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory];
-const NO_POSTING = [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads];
-
-function permissionOverwrites(access, { everyoneId, staffIds, botId }) {
-  const bot = { id: botId, allow: BOT_CHANNEL_ALLOW };
-  const staff = (overwrite) => staffIds.map((id) => ({ id, ...overwrite }));
-  switch (access) {
-    case 'readonly':
-      return [{ id: everyoneId, deny: NO_POSTING }, ...staff({ allow: [P.SendMessages] }), bot];
-    case 'staff':
-      return [{ id: everyoneId, deny: [P.ViewChannel] }, ...staff({ allow: [P.ViewChannel] }), bot];
-    case 'log':
-      return [
-        { id: everyoneId, deny: [P.ViewChannel] },
-        ...staff({ allow: [P.ViewChannel, P.ReadMessageHistory], deny: NO_POSTING }),
-        bot,
-      ];
-    default:
-      return [];
-  }
-}
-
-// Discord แปลงชื่อห้องข้อความเป็นตัวเล็กและแทนช่องว่างด้วย - จึงต้องเทียบแบบเดียวกัน
-const sameName = (a, b) => a.toLowerCase().replaceAll(' ', '-') === b.toLowerCase().replaceAll(' ', '-');
-
-function findExisting(guild, known, item, type) {
-  return (
-    guild.channels.cache.get(known[item.key]) ??
-    guild.channels.cache.find((c) => c.type === type && sameName(c.name, item.name))
-  );
-}
-
-async function upsert(guild, known, item, options) {
-  const existing = findExisting(guild, known, item, options.type);
-  const { type, ...changes } = options;
-  const channel = existing ? await existing.edit(changes) : await guild.channels.create(options);
-  known[item.key] = channel.id;
-  console.log(`${existing ? 'อัปเดต' : 'สร้าง  '}  ${item.name}`);
-  return channel;
-}
+const STATUS = { create: 'สร้าง  ', update: 'อัปเดต', keep: 'คงเดิม' };
 
 async function upsertRoles(guild) {
   const roles = await guild.roles.fetch();
-  const levelRoles = [];
 
   // ยศใหม่จะอยู่ล่างสุดเสมอ และ Discord ไม่ให้บอทย้ายลำดับยศ จึงต้องสร้างจากสูงไปต่ำ
   for (const level of ROLE_LEVELS) {
@@ -70,12 +28,10 @@ async function upsertRoles(guild) {
       permissions: level.permissions,
       hoist: true,
     };
-    const role = existing ? await existing.edit(options) : await guild.roles.create(options);
-    levelRoles.push(role);
+    if (existing) await existing.edit(options);
+    else await guild.roles.create(options);
     console.log(`${existing ? 'อัปเดต' : 'สร้าง  '}  Lv.${level.level} ${level.name}`);
   }
-
-  return levelRoles;
 }
 
 // ลด @everyone เหลือแค่อ่าน แล้วให้สิทธิ์พิมพ์มาจากยศแทน ต้องแจกยศก่อนเสมอ ไม่งั้นสมาชิกจะพิมพ์ไม่ได้
@@ -89,12 +45,12 @@ async function restrictEveryone(guild) {
   console.log('ลดสิทธิ์ @everyone แล้ว (ค่าเดิมอยู่ใน everyone-backup.txt)');
 }
 
-function printPreview() {
+function printPreview(template) {
   for (const level of ROLE_LEVELS) {
     console.log(`Lv.${level.level} ${level.name}${level.staff ? ' [ทีมงาน]' : ''}  ${level.permissions.length} สิทธิ์`);
   }
-  console.log('');
-  for (const category of LAYOUT) {
+  console.log(`\nเทมเพลต ${template.emoji} ${template.name} (${template.id})`);
+  for (const category of template.categories) {
     console.log(category.name);
     for (const c of category.channels) console.log(`  ${c.name}  [${c.voice ? 'เสียง, ' : ''}${c.access}]`);
   }
@@ -110,7 +66,11 @@ async function login() {
 }
 
 async function run() {
-  if (process.argv.includes('--dry-run')) return printPreview();
+  const templateId = process.argv.find((arg) => arg.startsWith('--template='))?.split('=')[1] ?? 'shop';
+  const template = findTemplate(templateId);
+  if (!template) throw new Error(`ไม่มีเทมเพลต "${templateId}" เลือกได้: ${TEMPLATES.map((t) => t.id).join(', ')}`);
+
+  if (process.argv.includes('--dry-run')) return printPreview(template);
   if (!process.env.DISCORD_TOKEN) throw new Error('ยังไม่ได้ใส่ DISCORD_TOKEN ในไฟล์ .env');
 
   const client = await login();
@@ -135,47 +95,19 @@ async function run() {
     }
 
     await guild.channels.fetch();
-    const levelRoles = await upsertRoles(guild);
-    const staffIds = levelRoles.filter((_, index) => ROLE_LEVELS[index].staff).map((role) => role.id);
+    await upsertRoles(guild);
+    await guild.roles.fetch();
 
-    const ids = { everyoneId: guild.roles.everyone.id, staffIds, botId: client.user.id };
-    const known = existsSync(CHANNELS_FILE) ? JSON.parse(readFileSync(CHANNELS_FILE, 'utf8')) : {};
-    const categories = [];
+    const plan = planTemplate(guild, template, client.user.id);
+    await applyPlan(guild, plan, (_, __, step) => console.log(`${STATUS[step.action]}  ${step.item.name}`));
 
-    for (const category of LAYOUT) {
-      const parent = await upsert(guild, known, category, {
-        name: category.name,
-        type: ChannelType.GuildCategory,
-        permissionOverwrites: permissionOverwrites(category.access, ids),
-      });
-      categories.push(parent);
-
-      for (const item of category.channels) {
-        const options = {
-          name: item.name,
-          type: item.voice ? ChannelType.GuildVoice : ChannelType.GuildText,
-          parent,
-          permissionOverwrites: permissionOverwrites(item.access, ids),
-        };
-        if (item.topic) options.topic = item.topic;
-        await upsert(guild, known, item, options);
-      }
-      writeFileSync(CHANNELS_FILE, JSON.stringify(known, null, 2));
-    }
-
-    // ให้หมวดใหม่อยู่บนสุด โดยคงลำดับของหมวดเดิมไว้ต่อท้าย
-    const otherCategories = guild.channels.cache
-      .filter((c) => c.type === ChannelType.GuildCategory && !categories.some((own) => own.id === c.id))
-      .sort((a, b) => a.position - b.position);
-    await guild.channels.setPositions(
-      [...categories, ...otherCategories.values()].map((channel, position) => ({ channel, position })),
-    );
+    if (await ensureTicketPanel(client)) console.log('โพสต์แผงเปิดทิกเก็ตแล้ว');
 
     if (process.argv.includes('--restrict-everyone')) await restrictEveryone(guild);
 
-    const planned = new Set(Object.values(known));
+    const planned = new Set(Object.values(channels));
     const others = guild.channels.cache.filter((c) => !planned.has(c.id) && !c.isThread());
-    console.log(`\nเสร็จแล้ว: ${planned.size} หมวดหมู่และห้อง`);
+    console.log(`\nเสร็จแล้ว: สร้าง ${plan.counts.create} · อัปเดต ${plan.counts.update} · คงเดิม ${plan.counts.keep}`);
     if (others.size) {
       console.log(`ห้องเดิมที่ไม่ได้แตะ: ${others.map((c) => c.name).join(', ')}`);
     }

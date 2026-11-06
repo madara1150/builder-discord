@@ -2,11 +2,15 @@ import { EmbedBuilder, InteractionContextType, MessageFlags, SlashCommandBuilder
 import { general } from './general.js';
 import { moderation } from './moderation.js';
 import { musicCommands } from './music.js';
+import { templateCommands } from './template.js';
+import { ticketCommands } from './ticket.js';
 
 const CATEGORIES = [
   { title: '📌 ทั่วไป', commands: general },
   { title: '🎵 เพลง', commands: musicCommands },
+  { title: '🎫 ทิกเก็ต', commands: ticketCommands },
   { title: '🛡️ ทีมงาน', commands: moderation },
+  { title: '🧩 เทมเพลต (แอดมิน)', commands: templateCommands },
 ];
 
 const help = {

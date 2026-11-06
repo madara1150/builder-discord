@@ -6,10 +6,9 @@ import {
   PermissionFlagsBits as P,
   SlashCommandBuilder,
 } from 'discord.js';
-import { readFileSync } from 'node:fs';
 import { setLevel } from '../roles.js';
+import { channels } from '../store.js';
 
-const CHANNELS = JSON.parse(readFileSync(new URL('../../channels.json', import.meta.url), 'utf8'));
 const MINUTE = 60 * 1000;
 
 const command = (name, description, permission) =>
@@ -33,8 +32,12 @@ function outranks(actor, target) {
 
 // การกระทำผ่านบอทถูกตัดออกจาก Log ฝั่ง Audit จึงต้องบันทึกจากตรงนี้
 const auditReason = (interaction, reason) => `${interaction.user.tag}: ${reason ?? 'ไม่ระบุเหตุผล'}`;
-const modLog = (log, interaction, title, target, reason) =>
-  log('log-members', 'bad', title, `โดย ${interaction.user} · เป้าหมาย: ${target}`, reason ? [{ name: 'เหตุผล', value: reason }] : []);
+const modLog = (log, interaction, title, user, reason) =>
+  log('log-members', 'bad', title, `เป้าหมาย: ${user} (${user.tag})`, reason ? [{ name: '📝 เหตุผล', value: reason }] : [], {
+    actor: interaction.member,
+    thumbnail: user.displayAvatarURL({ size: 256 }),
+    footer: `ID: ${user.id}`,
+  });
 
 export const moderation = [
   {
@@ -43,7 +46,7 @@ export const moderation = [
     async execute(interaction, { log }) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const deleted = await interaction.channel.bulkDelete(interaction.options.getInteger('amount'), true);
-      await log('log-messages', 'bad', '🧹 ล้างข้อความด้วยคำสั่ง', `โดย ${interaction.user} ใน ${interaction.channel} · ${deleted.size} ข้อความ`);
+      await log('log-messages', 'bad', '🧹 ล้างข้อความด้วยคำสั่ง', `ลบ **${deleted.size}** ข้อความใน ${interaction.channel}`, [], { actor: interaction.member });
       await interaction.editReply(`🧹 ลบแล้ว ${deleted.size} ข้อความ`);
     },
   },
@@ -55,7 +58,7 @@ export const moderation = [
       if (!target) return refuse(interaction, 'ไม่พบสมาชิกคนนี้ในเซิร์ฟเวอร์');
       if (!outranks(interaction.member, target) || !target.kickable) return refuse(interaction, 'คุณหรือบอทมียศไม่สูงพอที่จะเตะคนนี้');
       await target.kick(auditReason(interaction, reason));
-      await modLog(log, interaction, '👢 เตะสมาชิก', target.user.tag, reason);
+      await modLog(log, interaction, '👢 เตะสมาชิก', target.user, reason);
       return interaction.reply({ content: `👢 เตะ ${target.user.tag} แล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -69,7 +72,7 @@ export const moderation = [
         return refuse(interaction, 'คุณหรือบอทมียศไม่สูงพอที่จะแบนคนนี้');
       }
       await interaction.guild.bans.create(user.id, { reason: auditReason(interaction, reason) });
-      await modLog(log, interaction, '🔨 แบนสมาชิก', user.tag, reason);
+      await modLog(log, interaction, '🔨 แบนสมาชิก', user, reason);
       return interaction.reply({ content: `🔨 แบน ${user.tag} แล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -80,7 +83,7 @@ export const moderation = [
       const userId = interaction.options.getString('user_id').trim();
       const unbanned = await interaction.guild.bans.remove(userId, auditReason(interaction)).catch(() => null);
       if (!unbanned) return refuse(interaction, 'ไม่พบการแบนของไอดีนี้');
-      await modLog(log, interaction, '🕊️ ปลดแบนสมาชิก', unbanned.tag);
+      await modLog(log, interaction, '🕊️ ปลดแบนสมาชิก', unbanned);
       return interaction.reply({ content: `🕊️ ปลดแบน ${unbanned.tag} แล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -94,7 +97,7 @@ export const moderation = [
       if (!target) return refuse(interaction, 'ไม่พบสมาชิกคนนี้ในเซิร์ฟเวอร์');
       if (!outranks(interaction.member, target) || !target.moderatable) return refuse(interaction, 'คุณหรือบอทมียศไม่สูงพอที่จะจัดการคนนี้');
       await target.timeout(minutes * MINUTE, auditReason(interaction, reason));
-      await modLog(log, interaction, `⏳ หมดเวลาสมาชิก ${minutes} นาที`, target.user.tag, reason);
+      await modLog(log, interaction, `⏳ หมดเวลาสมาชิก ${minutes} นาที`, target.user, reason);
       return interaction.reply({ content: `⏳ หมดเวลา ${target.user.tag} ${minutes} นาทีแล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -105,7 +108,7 @@ export const moderation = [
       if (!target) return refuse(interaction, 'ไม่พบสมาชิกคนนี้ในเซิร์ฟเวอร์');
       if (!outranks(interaction.member, target) || !target.moderatable) return refuse(interaction, 'คุณหรือบอทมียศไม่สูงพอที่จะจัดการคนนี้');
       await target.timeout(null, auditReason(interaction));
-      await modLog(log, interaction, '⌛ ยกเลิกการหมดเวลา', target.user.tag);
+      await modLog(log, interaction, '⌛ ยกเลิกการหมดเวลา', target.user);
       return interaction.reply({ content: `⌛ ยกเลิกการหมดเวลาของ ${target.user.tag} แล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -118,7 +121,11 @@ export const moderation = [
       if (!outranks(interaction.member, target)) return refuse(interaction, 'คุณมียศไม่สูงพอที่จะเปลี่ยนระดับของคนนี้');
       const result = await setLevel(interaction.member, target, interaction.options.getInteger('level'));
       if (!result) return refuse(interaction, 'คุณตั้งระดับเท่าหรือสูงกว่ายศของตัวเองไม่ได้');
-      await log('log-members', 'warn', '🎭 ตั้งระดับยศ', `โดย ${interaction.user} · ${target} → ${result.name}`);
+      await log('log-members', 'warn', '🎭 ตั้งระดับยศ', `${target} → **${result.name}**`, [], {
+        actor: interaction.member,
+        thumbnail: target.displayAvatarURL({ size: 256 }),
+        footer: `ID: ${target.id}`,
+      });
       return interaction.reply({ content: `🎭 ตั้ง ${target.user.tag} เป็น ${result.name} แล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -127,7 +134,7 @@ export const moderation = [
       .addStringOption((option) => option.setName('title').setDescription('หัวข้อ').setRequired(true).setMaxLength(200))
       .addStringOption((option) => option.setName('message').setDescription('ข้อความ').setRequired(true)),
     async execute(interaction) {
-      const channel = await interaction.client.channels.fetch(CHANNELS.announcements);
+      const channel = await interaction.client.channels.fetch(channels.announcements);
       const embed = new EmbedBuilder()
         .setColor(0xf1c40f)
         .setTitle(`📢 ${interaction.options.getString('title')}`)

@@ -6,7 +6,8 @@
 
 [![Node.js](https://img.shields.io/badge/Node.js-20.6%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![discord.js](https://img.shields.io/badge/discord.js-v14-5865F2?logo=discord&logoColor=white)](https://discord.js.org/)
-[![Slash Commands](https://img.shields.io/badge/Slash_Commands-26-FEE75C)](#-commands)
+[![Slash Commands](https://img.shields.io/badge/Slash_Commands-28-FEE75C)](#-commands)
+[![Templates](https://img.shields.io/badge/Templates-4-EB459E)](#-channel-templates)
 [![Role Levels](https://img.shields.io/badge/Role_Levels-10-57F287)](#-10-role-levels)
 
 [ภาษาไทย](README.md) · **English**
@@ -19,14 +20,64 @@
 
 | | |
 |---|---|
-| 🏗️ **Automated server setup** | Creates 5 categories and 21 channels with emoji, topics, and per-channel permissions. Safe to re-run without duplicating channels. |
+| 🎫 **Tickets** | Members pick a topic from a panel and get a private channel with staff, with claim and close buttons and an HTML chat transcript. |
+| 🧩 **Channel templates** | Build a whole server with `/template`. Pick one of 4 templates, see a preview image, and confirm before anything is created. |
+| 🏗️ **Automated server setup** | Creates categories and channels with emoji, topics, and per-channel permissions. Safe to re-run: no duplicates, and existing channels are never deleted. |
 | 🎭 **10 role levels** | Permissions grow with each level, and new members get a starter role automatically. |
+| 🖼️ **Image log cards** | Every change is drawn as a "before → after" card with the editor's avatar, role colors, icons, and readable permission names. |
 | 📝 **Activity logging** | Records edited and deleted messages, member, voice, and server changes, including who made them. |
 | 🎵 **Music** | Plays from SoundCloud with queue, loop, and shuffle. Supports Discord's DAVE voice encryption. |
 | 🛡️ **Moderation** | Kick, ban, timeout, clear messages, set levels, and post announcements. Staff can't act on equal or higher roles. |
-| 👋 **Welcome and notices** | Greets new members and reports bot status and server boosts. |
+| 👋 **Welcome and notices** | Greets new members with an image card and reports bot status and server boosts. |
 
-## 🗂️ Channel layout
+## 🖼️ Screenshots
+
+Card text is in Thai by default.
+
+<table>
+<tr>
+<td width="50%"><b>Role change card</b><br><img src="docs/images/change-card.png" alt="Before and after card for a role change"></td>
+<td width="50%"><b>Message edit card</b><br><img src="docs/images/message-card.png" alt="Before and after card for an edited message"></td>
+</tr>
+<tr>
+<td><b>Template preview</b><br><img src="docs/images/template-preview.png" alt="Template preview marking new and changed channels"></td>
+<td><b>Welcome card</b><br><img src="docs/images/welcome-card.png" alt="Welcome card for a new member"></td>
+</tr>
+<tr>
+<td colspan="2"><b>Ticket panel banner</b><br><img src="docs/images/ticket-banner.png" alt="Ticket panel banner"></td>
+</tr>
+</table>
+
+## 🎫 Tickets
+
+1. A member picks a topic from the menu in **🎫 Open a ticket**: 🛒 Order, 💳 Payment, 🛠️ Problem, or 💬 Other.
+2. They fill in optional details in a pop-up form.
+3. The bot creates `🎫・0001-username` in **📂 Open tickets**, visible only to that member and staff roles (Lv.5 and up), and pings 🎧 Customer support.
+4. Staff press **🙋 Claim** to show who's handling it.
+5. The member or staff press **🔒 Close**. The bot posts a summary and an HTML transcript to **🎫 Ticket log**, then deletes the channel after 5 seconds.
+
+- Each member can have one open ticket at a time.
+- Edit the topics in `TICKET_TYPES` in [`src/tickets.js`](src/tickets.js), then run `/ticket panel` to refresh the panel.
+- Images and files in a transcript may stop loading after the channel is deleted, because Discord attachment links expire.
+
+## 🧩 Channel templates
+
+| Template | ID | Template-specific channels |
+|---|---|---|
+| 🛒 Shop | `shop` | Products, promotions, ordering, payment, reviews, questions, and chat |
+| 🌐 Community | `community` | Chat, introductions, media, artwork, events, and lounge voice rooms |
+| 🎮 Gaming | `gaming` | Looking for group, ranks, clips, game news, guides, and party rooms |
+| 📚 Study | `study` | Homework help, notes, exam schedule, resources, and study rooms |
+
+Every template shares the 📌 Server info, 🎫 Support, 📂 Tickets, 🤖 Bot, and 🔒 Staff categories, because the bot relies on those channels.
+
+- `/template apply` shows a preview image that marks **new** and **changed** channels, then waits for you to confirm.
+- Templates never delete channels. Channels outside the template are left alone.
+- You can apply several templates to one server. Shared categories aren't created twice.
+
+Edit or add templates in [`src/templates.js`](src/templates.js).
+
+## 🗂️ Channel layout (Shop template)
 
 Channel names are in Thai by default.
 
@@ -35,12 +86,14 @@ Channel names are in Thai by default.
 🛒 Shop           🛍️ Products · 🔥 Promotions · 🧾 How to order · 💳 Payment
                   ⭐ Reviews · ❓ Questions
 💬 Chat           💬 General · 📷 Media · 💡 Suggestions · 🔊 Voice chat · 🎵 Music
+🎫 Support        🎫 Open a ticket
+📂 Open tickets   (the bot creates ticket channels here)
 🤖 Bot            🔔 Bot notices · ⌨️ Bot commands
 🔒 Staff          🛡️ Staff chat · 📝 Message log · 👥 Member log
-                  ⚙️ Server log · 🎙️ Voice log
+                  ⚙️ Server log · 🎙️ Voice log · 🎫 Ticket log
 ```
 
-To rename or add channels, edit [`src/layout.js`](src/layout.js) and run `npm run setup` again.
+To rename or add channels, edit [`src/templates.js`](src/templates.js) and run `npm run setup` again.
 
 ## 🎭 10 role levels
 
@@ -94,6 +147,18 @@ Level 5 and above can see the 🔒 Staff category and log channels.
 </details>
 
 <details open>
+<summary><b>🎫 Tickets</b></summary>
+
+| Command | Description | Who can use it |
+|---|---|---|
+| `/ticket close` | Close this ticket, with an optional reason | Ticket owner or staff |
+| `/ticket add` | Add someone to this ticket | Staff |
+| `/ticket remove` | Remove someone from this ticket | Staff |
+| `/ticket panel` | Post or refresh the ticket panel | Admins |
+
+</details>
+
+<details open>
 <summary><b>🛡️ Staff</b></summary>
 
 | Command | Description | Minimum role |
@@ -105,6 +170,17 @@ Level 5 and above can see the 🔒 Staff category and log channels.
 | `/ban` · `/unban` | Ban · Unban | Lv.8 |
 | `/slowmode` | Set channel slowmode | Lv.9 |
 | `/setlevel` | Set a member's role level, 1-10 | Lv.10 |
+
+</details>
+
+<details open>
+<summary><b>🧩 Templates (admins)</b></summary>
+
+| Command | Description |
+|---|---|
+| `/template list` | List all templates |
+| `/template preview` | Preview which channels would be created or changed |
+| `/template apply` | Build channels from a template after you confirm |
 
 </details>
 
@@ -155,7 +231,8 @@ npm start
 | Script | Description |
 |---|---|
 | `npm run preview` | List roles and channels without connecting to Discord |
-| `npm run setup` | Create or update roles and channels. Never deletes existing channels. |
+| `npm run setup` | Create or update roles and channels from the Shop template. Never deletes existing channels. |
+| `npm run setup -- --template=gaming` | Use another template (`shop` `community` `gaming` `study`) |
 | `npm run setup -- --restrict-everyone` | Same as above, then reduce `@everyone` to read-only |
 | `npm start` | Start the bot and register slash commands |
 
@@ -164,21 +241,32 @@ npm start
 ```text
 src/
 ├── bot.js            Bot startup, logging, and command handling
-├── setup.js          Creates roles and channels
-├── layout.js         Role and channel definitions
+├── setup.js          Creates roles and channels from the terminal
+├── builder.js        Plans and builds channels from a template
+├── templates.js      All channel templates
+├── layout.js         The 10 role levels
+├── store.js          Remembers which channel is which (channels.json)
 ├── roles.js          Assigns and changes roles
 ├── music.js          Music playback
+├── tickets.js        Ticket system
+├── ui/
+│   ├── cards.js      Draws the image cards
+│   ├── changes.js    Turns changes into readable Thai text
+│   └── transcript.js Builds the ticket chat transcript
 └── commands/
     ├── index.js      Command list and /help
     ├── general.js    General commands
     ├── music.js      Music commands
-    └── moderation.js Staff commands
+    ├── moderation.js Staff commands
+    ├── template.js   Template commands
+    └── ticket.js     Ticket commands
 ```
 
 ## ⚠️ Good to know
 
 - **The bot must stay running.** Events that happen while it's off aren't logged. With `--restrict-everyone`, new members can't type until the bot is back and assigns their role.
 - **Music plays from SoundCloud only.** YouTube isn't supported.
+- **Emoji in image cards** use the host's emoji font. On Linux without one, cards drop emoji automatically. Install `fonts-noto-color-emoji` to show them.
 - **The bot can't reorder roles.** If you add a role, drag it into place in Discord.
 - **`--restrict-everyone` affects existing members.** Anyone without a level gets ✅ Member, and the old permissions are saved to `everyone-backup.txt`.
 - **Never commit `.env`.** If your token leaks, reset it in the Developer Portal right away.
