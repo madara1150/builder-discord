@@ -1,5 +1,5 @@
 // แปลงรายการเปลี่ยนแปลงจาก Audit Log ให้เป็นภาษาไทยที่อ่านง่าย
-import { PermissionsBitField } from 'discord.js';
+import { AuditLogEvent as A, PermissionsBitField } from 'discord.js';
 import { colorHex, thaiTime } from './cards.js';
 
 // ค่าของ entry.targetType ใน discord.js (ไม่ได้ export เป็น enum)
@@ -215,10 +215,10 @@ export function describeChanges(entry, guild) {
 }
 
 // ชื่อ ลิงก์ และรูปของเป้าหมายใน Audit Log
+// forWho คือยศหรือสมาชิกที่ถูกตั้งสิทธิ์ (มีเฉพาะการแก้สิทธิ์ของห้อง)
 export function describeTarget(entry, guild) {
-  const { target, targetId } = entry;
+  const { target, targetId, extra } = entry;
   const deletedName = entry.changes.find((c) => c.key === 'name')?.old;
-  const extra = entry.extra?.name ?? entry.extra?.user?.username ?? entry.extra?.displayName;
 
   switch (entry.targetType) {
     case Target.User:
@@ -231,35 +231,116 @@ export function describeTarget(entry, guild) {
     case Target.Thread: {
       const channel = guild.channels.cache.get(targetId);
       const name = channel?.name ?? target?.name ?? deletedName ?? targetId;
-      const forWho = extra ? ` · สำหรับ ${extra}` : '';
-      return { name: `#${name}${forWho}`, mention: `${channel ? `<#${targetId}>` : `#${name}`}${forWho}` };
+      let forWho = null;
+      if (extra?.id) {
+        if (extra.id === guild.id) forWho = '@everyone';
+        else forWho = guild.roles.cache.has(extra.id) ? `<@&${extra.id}>` : `<@${extra.id}>`;
+      }
+      const forWhoName = extra?.name ?? extra?.user?.username ?? extra?.displayName;
+      return {
+        name: `#${name}${forWhoName ? ` · สำหรับ ${forWhoName}` : ''}`,
+        mention: channel ? `<#${targetId}>` : `**#${name}**`,
+        forWho,
+      };
     }
     case Target.Role: {
       const role = guild.roles.cache.get(targetId);
       const name = role?.name ?? target?.name ?? deletedName ?? targetId;
       const label = name.startsWith('@') ? name : `@${name}`;
-      return { name: label, mention: role && role.id !== guild.id ? `<@&${targetId}>` : label, thumbnail: role?.iconURL?.() };
+      return { name: label, mention: role && role.id !== guild.id ? `<@&${targetId}>` : `**${label}**`, thumbnail: role?.iconURL?.() };
     }
     case Target.Guild:
       return { name: guild.name, mention: `**${guild.name}**`, thumbnail: guild.iconURL({ size: 256 }) };
-    case Target.Emoji:
-      return {
-        name: `:${target?.name ?? deletedName ?? targetId}:`,
-        mention: `:${target?.name ?? deletedName ?? targetId}:`,
-        thumbnail: `https://cdn.discordapp.com/emojis/${targetId}.png`,
-      };
+    case Target.Emoji: {
+      const name = `:${target?.name ?? deletedName ?? targetId}:`;
+      return { name, mention: `**${name}**`, thumbnail: `https://cdn.discordapp.com/emojis/${targetId}.png` };
+    }
     default: {
       const name = target?.name ?? target?.code ?? deletedName ?? targetId ?? '-';
-      return { name, mention: `\`${name}\`` };
+      return { name, mention: `**${name}**` };
     }
   }
 }
 
-// ข้อความสำรองเมื่อวาดการ์ดไม่สำเร็จ ใช้รูปแบบ diff ให้ Discord ไฮไลต์สีแดงและเขียว
-export function diffText(row) {
-  const lines = [];
-  if (row.before !== null && row.before !== undefined) lines.push(`- ${row.kind === 'image' ? (row.before ? 'รูปเดิม' : 'ไม่มีรูป') : row.before}`);
-  if (row.after !== null && row.after !== undefined) lines.push(`+ ${row.kind === 'image' ? (row.after ? 'รูปใหม่' : 'ไม่มีรูป') : row.after}`);
-  const body = lines.join('\n').replaceAll('```', "'''");
-  return `\`\`\`diff\n${body.length > 1000 ? `${body.slice(0, 999)}…` : body}\n\`\`\``;
+const roleMentions = (entry, key) =>
+  (entry.changes.find((c) => c.key === key)?.new ?? []).map((role) => `<@&${role.id}>`).join(' ');
+
+// ประโยคสรุปว่า "ใครทำอะไรกับอะไร" สำหรับบรรทัดแรกของ Log
+export function auditSentence(entry, actor, target) {
+  const t = target.mention;
+  const forWho = target.forWho ? `ของ ${target.forWho} ` : '';
+  const self = entry.executorId === entry.targetId;
+  const changed = (key) => entry.changes.find((c) => c.key === key);
+
+  switch (entry.action) {
+    case A.GuildUpdate: return `${actor} แก้ไขการตั้งค่าเซิร์ฟเวอร์`;
+    case A.ChannelCreate: return `${actor} สร้างห้อง ${t}`;
+    case A.ChannelUpdate: return `${actor} แก้ไขห้อง ${t}`;
+    case A.ChannelDelete: return `${actor} ลบห้อง ${t}`;
+    case A.ChannelOverwriteCreate: return `${actor} เพิ่มสิทธิ์${forWho}ในห้อง ${t}`;
+    case A.ChannelOverwriteUpdate: return `${actor} แก้สิทธิ์${forWho}ในห้อง ${t}`;
+    case A.ChannelOverwriteDelete: return `${actor} ลบสิทธิ์${forWho}ในห้อง ${t}`;
+    case A.RoleCreate: return `${actor} สร้างยศ ${t}`;
+    case A.RoleUpdate: return `${actor} แก้ไขยศ ${t}`;
+    case A.RoleDelete: return `${actor} ลบยศ ${t}`;
+    case A.EmojiCreate: return `${actor} เพิ่มอิโมจิ ${t}`;
+    case A.EmojiUpdate: return `${actor} แก้ไขอิโมจิ ${t}`;
+    case A.EmojiDelete: return `${actor} ลบอิโมจิ ${t}`;
+    case A.StickerCreate: return `${actor} เพิ่มสติกเกอร์ ${t}`;
+    case A.StickerUpdate: return `${actor} แก้ไขสติกเกอร์ ${t}`;
+    case A.StickerDelete: return `${actor} ลบสติกเกอร์ ${t}`;
+    case A.WebhookCreate: return `${actor} สร้าง Webhook ${t}`;
+    case A.WebhookUpdate: return `${actor} แก้ไข Webhook ${t}`;
+    case A.WebhookDelete: return `${actor} ลบ Webhook ${t}`;
+    case A.InviteCreate: return `${actor} สร้างลิงก์เชิญ ${t}`;
+    case A.InviteDelete: return `${actor} ลบลิงก์เชิญ ${t}`;
+    case A.BotAdd: return `${actor} เพิ่มบอท ${t} เข้าเซิร์ฟเวอร์`;
+    case A.MemberKick: return `${actor} เตะ ${t} ออกจากเซิร์ฟเวอร์`;
+    case A.MemberBanAdd: return `${actor} แบน ${t}`;
+    case A.MemberBanRemove: return `${actor} ปลดแบน ${t}`;
+    case A.MemberRoleUpdate: {
+      const added = roleMentions(entry, '$add');
+      const removed = roleMentions(entry, '$remove');
+      const parts = [added && `ให้ยศ ${added} แก่ ${t}`, removed && `ถอดยศ ${removed} ของ ${t}`].filter(Boolean);
+      return `${actor} ${parts.join(' และ') || `เปลี่ยนยศของ ${t}`}`;
+    }
+    case A.MemberUpdate: {
+      if (changed('nick')) return self ? `${t} เปลี่ยนชื่อเล่นของตัวเอง` : `${actor} เปลี่ยนชื่อเล่นของ ${t}`;
+      const timeout = changed('communication_disabled_until');
+      if (timeout) return timeout.new ? `${actor} สั่งหมดเวลา ${t}` : `${actor} ยกเลิกการหมดเวลาของ ${t}`;
+      if (changed('mute')) return `${actor} ${changed('mute').new ? 'ปิดเสียง' : 'เปิดเสียง'} ${t} ในห้องเสียง`;
+      if (changed('deaf')) return `${actor} ${changed('deaf').new ? 'ปิดการได้ยินของ' : 'เปิดการได้ยินให้'} ${t}`;
+      return `${actor} แก้ไขข้อมูลของ ${t}`;
+    }
+    default: return `${actor} ทำรายการกับ ${t}`;
+  }
+}
+
+const shortValue = (value, max = 80) => {
+  const text = String(value).replaceAll('`', "'").replace(/\s+/g, ' ');
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+};
+
+// รายการเปลี่ยนแปลงแบบสั้นสำหรับใต้ประโยคสรุป
+export function changeBullets(rows, max = 6) {
+  const value = (v) => (v === '' ? '*(ว่าง)*' : `\`${shortValue(v)}\``);
+  const lines = rows.slice(0, max).map((row) => {
+    const label = `**${row.label}**`;
+    if (row.kind === 'image') return `• ${label}: เปลี่ยนรูป ดูภาพด้านล่าง`;
+    if (row.kind === 'perm') {
+      const parts = [row.after, row.before].filter((part) => part && part !== '—').map((part) => shortValue(part, 300));
+      return `• ${label}: ${parts.join(' · ') || 'ไม่มีการเปลี่ยนแปลง'}`;
+    }
+    if (row.before == null) return `• ${label}: ${value(row.after)}`;
+    if (row.after == null) return `• ${label}: ~~${shortValue(row.before)}~~`;
+    return `• ${label}: ${value(row.before)} → ${value(row.after)}`;
+  });
+  if (rows.length > max) lines.push(`• และอีก ${rows.length - max} รายการ`);
+  return lines.join('\n');
+}
+
+// ใช้การ์ดรูปเฉพาะเมื่อรูปช่วยให้เข้าใจกว่าข้อความ เช่น สี รูป สิทธิ์ หรือข้อความยาว
+export function needsCard(rows) {
+  return rows.length > 4 || rows.some((row) =>
+    row.kind !== 'text' || String(row.before ?? '').length > 60 || String(row.after ?? '').length > 60);
 }

@@ -17,6 +17,7 @@ import { staffRoleIds } from './builder.js';
 import { ROLE_LEVELS } from './layout.js';
 import { channels, saveTickets, tickets } from './store.js';
 import { renderTicketBanner } from './ui/cards.js';
+import { thaiDuration } from './ui/time.js';
 import { renderTranscript } from './ui/transcript.js';
 
 // หัวข้อในเมนูเปิดทิกเก็ต แก้หรือเพิ่มได้ (id ห้ามมีช่องว่าง)
@@ -45,13 +46,6 @@ export function ticketInfo(channel) {
 
 const isStaff = (member) => member.id === member.guild.ownerId || member.permissions.has(P.ManageMessages);
 const relative = (ms) => `<t:${Math.floor(ms / 1000)}:R>`;
-
-function duration(ms) {
-  const minutes = Math.max(1, Math.round(ms / 60000));
-  const days = Math.floor(minutes / 1440);
-  const hours = Math.floor((minutes % 1440) / 60);
-  return [days && `${days} วัน`, hours && `${hours} ชม.`, `${minutes % 60} นาที`].filter(Boolean).join(' ');
-}
 
 const slug = (text) => text.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20) || 'user';
 
@@ -161,9 +155,10 @@ export async function openTicket(member, type, details, { log }) {
     allowedMentions: { users: [member.id], roles: pingRole ? [pingRole.id] : [] },
   });
 
-  await log('log-tickets', 'good', '🎫 เปิดทิกเก็ต', `${channel} · ${type.emoji} ${type.label}`, [
+  await log('log-tickets', 'good', '🎫 เปิดทิกเก็ต', `${member} เปิดทิกเก็ต ${channel}
+หัวข้อ **${type.emoji} ${type.label}**`, [
     ...(details ? [{ name: 'รายละเอียด', value: details.slice(0, 1000) }] : []),
-  ], { actor: member, thumbnail: member.displayAvatarURL({ size: 256 }), footer: `ทิกเก็ต ${label} · ID: ${member.id}` });
+  ], { actor: member, thumbnail: member.displayAvatarURL({ size: 256 }), footer: `ทิกเก็ต ${label}  ·  ID ${member.id}` });
 
   return { channel };
 }
@@ -201,12 +196,13 @@ export async function closeTicket(channel, closer, reason, { log }) {
     subtitle: info ? `${info.type.emoji} ${info.type.label}` : channel.name,
     messages,
   });
-  await log('log-tickets', 'bad', `🔒 ปิดทิกเก็ต ${label}`, info ? `${info.type.emoji} ${info.type.label}` : `#${channel.name}`, [
+  await log('log-tickets', 'bad', `🔒 ปิดทิกเก็ต ${label}`, `${closer} ปิดทิกเก็ต **${label}**${info ? `
+หัวข้อ **${info.type.emoji} ${info.type.label}**` : ''}`, [
     { name: 'ผู้เปิด', value: info ? `<@${info.ownerId}>` : '-', inline: true },
     { name: 'ผู้รับเรื่อง', value: claimerId ? `<@${claimerId}>` : '-', inline: true },
     { name: 'ผู้ปิด', value: `${closer}`, inline: true },
     { name: 'เปิดเมื่อ', value: relative(channel.createdTimestamp), inline: true },
-    { name: 'ใช้เวลา', value: duration(Date.now() - channel.createdTimestamp), inline: true },
+    { name: 'ใช้เวลา', value: thaiDuration(Date.now() - channel.createdTimestamp), inline: true },
     { name: 'ข้อความ', value: `${humanMessages} ข้อความ`, inline: true },
     ...(reason ? [{ name: '📝 เหตุผล', value: reason.slice(0, 1000) }] : []),
   ], {

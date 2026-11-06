@@ -25,7 +25,7 @@
 | 🏗️ **Automated server setup** | Creates categories and channels with emoji, topics, and per-channel permissions. Safe to re-run: no duplicates, and existing channels are never deleted. |
 | 🎭 **10 role levels** | Permissions grow with each level, and new members get a starter role automatically. |
 | 🖼️ **Image log cards** | Every change is drawn as a "before → after" card with the editor's avatar, role colors, icons, and readable permission names. |
-| 📝 **Activity logging** | Records edited and deleted messages, member, voice, and server changes, including who made them. |
+| 📝 **Activity logging** | Records edited and deleted messages, member, voice, and server changes. Every entry starts with a plain Thai sentence saying who did what, followed by a list of what changed. |
 | 🎵 **Music** | Plays from SoundCloud with queue, loop, and shuffle. Supports Discord's DAVE voice encryption. |
 | 🛡️ **Moderation** | Kick, ban, timeout, clear messages, set levels, and post announcements. Staff can't act on equal or higher roles. |
 | 👋 **Welcome and notices** | Greets new members with an image card and reports bot status and server boosts. |
@@ -240,7 +240,9 @@ npm start
 
 ```text
 src/
-├── bot.js            Bot startup, logging, and command handling
+├── bot.js            Bot startup and command handling
+├── logger.js         Formats and sends log entries
+├── log-events.js     Turns server events into log entries
 ├── setup.js          Creates roles and channels from the terminal
 ├── builder.js        Plans and builds channels from a template
 ├── templates.js      All channel templates
@@ -252,7 +254,8 @@ src/
 ├── ui/
 │   ├── cards.js      Draws the image cards
 │   ├── changes.js    Turns changes into readable Thai text
-│   └── transcript.js Builds the ticket chat transcript
+│   ├── transcript.js Builds the ticket chat transcript
+│   └── time.js       Thai-readable durations
 └── commands/
     ├── index.js      Command list and /help
     ├── general.js    General commands

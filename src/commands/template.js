@@ -147,7 +147,8 @@ export const templateCommands = [
             { name: '⚪ เหมือนเดิม', value: `${fresh.counts.keep} รายการ`, inline: true });
         await interaction.editReply({ content: '', ...result, attachments: [] });
 
-        await log('log-server', 'good', `🧩 ใช้เทมเพลต${template.name}`, `สร้างใหม่ ${fresh.counts.create} · แก้ไข ${fresh.counts.update} · เหมือนเดิม ${fresh.counts.keep}`, [], {
+        await log('log-server', 'good', `🧩 ใช้เทมเพลต${template.name}`, `${interaction.member} ใช้เทมเพลต **${template.emoji} ${template.name}**
+• สร้างใหม่ **${fresh.counts.create}** · แก้ไข **${fresh.counts.update}** · เหมือนเดิม **${fresh.counts.keep}**`, [], {
           actor: interaction.member,
           image: renderTemplatePreview({ plan: after, guildName: interaction.guild.name }),
         });

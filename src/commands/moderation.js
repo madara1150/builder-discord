@@ -32,11 +32,13 @@ function outranks(actor, target) {
 
 // การกระทำผ่านบอทถูกตัดออกจาก Log ฝั่ง Audit จึงต้องบันทึกจากตรงนี้
 const auditReason = (interaction, reason) => `${interaction.user.tag}: ${reason ?? 'ไม่ระบุเหตุผล'}`;
-const modLog = (log, interaction, title, user, reason) =>
-  log('log-members', 'bad', title, `เป้าหมาย: ${user} (${user.tag})`, reason ? [{ name: '📝 เหตุผล', value: reason }] : [], {
+// sentence คือประโยคสรุป เช่น "@ก เตะ @ข ออกจากเซิร์ฟเวอร์"
+const modLog = (log, interaction, title, user, sentence, reason) =>
+  log('log-members', 'bad', title, `${sentence}
+ผ่านคำสั่งของบอท`, reason ? [{ name: '📝 เหตุผล', value: reason }] : [], {
     actor: interaction.member,
     thumbnail: user.displayAvatarURL({ size: 256 }),
-    footer: `ID: ${user.id}`,
+    footer: `ID ${user.id}`,
   });
 
 export const moderation = [
@@ -46,7 +48,7 @@ export const moderation = [
     async execute(interaction, { log }) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const deleted = await interaction.channel.bulkDelete(interaction.options.getInteger('amount'), true);
-      await log('log-messages', 'bad', '🧹 ล้างข้อความด้วยคำสั่ง', `ลบ **${deleted.size}** ข้อความใน ${interaction.channel}`, [], { actor: interaction.member });
+      await log('log-messages', 'bad', '🧹 ล้างข้อความ', `${interaction.member} ลบข้อความ **${deleted.size}** ข้อความในห้อง ${interaction.channel} ด้วยคำสั่ง /clear`, [], { actor: interaction.member });
       await interaction.editReply(`🧹 ลบแล้ว ${deleted.size} ข้อความ`);
     },
   },
@@ -58,7 +60,7 @@ export const moderation = [
       if (!target) return refuse(interaction, 'ไม่พบสมาชิกคนนี้ในเซิร์ฟเวอร์');
       if (!outranks(interaction.member, target) || !target.kickable) return refuse(interaction, 'คุณหรือบอทมียศไม่สูงพอที่จะเตะคนนี้');
       await target.kick(auditReason(interaction, reason));
-      await modLog(log, interaction, '👢 เตะสมาชิก', target.user, reason);
+      await modLog(log, interaction, '👢 เตะสมาชิก', target.user, `${interaction.member} เตะ ${target.user} ออกจากเซิร์ฟเวอร์`, reason);
       return interaction.reply({ content: `👢 เตะ ${target.user.tag} แล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -72,7 +74,7 @@ export const moderation = [
         return refuse(interaction, 'คุณหรือบอทมียศไม่สูงพอที่จะแบนคนนี้');
       }
       await interaction.guild.bans.create(user.id, { reason: auditReason(interaction, reason) });
-      await modLog(log, interaction, '🔨 แบนสมาชิก', user, reason);
+      await modLog(log, interaction, '🔨 แบนสมาชิก', user, `${interaction.member} แบน ${user}`, reason);
       return interaction.reply({ content: `🔨 แบน ${user.tag} แล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -83,7 +85,7 @@ export const moderation = [
       const userId = interaction.options.getString('user_id').trim();
       const unbanned = await interaction.guild.bans.remove(userId, auditReason(interaction)).catch(() => null);
       if (!unbanned) return refuse(interaction, 'ไม่พบการแบนของไอดีนี้');
-      await modLog(log, interaction, '🕊️ ปลดแบนสมาชิก', unbanned);
+      await modLog(log, interaction, '🕊️ ปลดแบนสมาชิก', unbanned, `${interaction.member} ปลดแบน ${unbanned}`);
       return interaction.reply({ content: `🕊️ ปลดแบน ${unbanned.tag} แล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -97,7 +99,7 @@ export const moderation = [
       if (!target) return refuse(interaction, 'ไม่พบสมาชิกคนนี้ในเซิร์ฟเวอร์');
       if (!outranks(interaction.member, target) || !target.moderatable) return refuse(interaction, 'คุณหรือบอทมียศไม่สูงพอที่จะจัดการคนนี้');
       await target.timeout(minutes * MINUTE, auditReason(interaction, reason));
-      await modLog(log, interaction, `⏳ หมดเวลาสมาชิก ${minutes} นาที`, target.user, reason);
+      await modLog(log, interaction, '⏳ หมดเวลาสมาชิก', target.user, `${interaction.member} สั่งหมดเวลา ${target.user} เป็นเวลา **${minutes} นาที**`, reason);
       return interaction.reply({ content: `⏳ หมดเวลา ${target.user.tag} ${minutes} นาทีแล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -108,7 +110,7 @@ export const moderation = [
       if (!target) return refuse(interaction, 'ไม่พบสมาชิกคนนี้ในเซิร์ฟเวอร์');
       if (!outranks(interaction.member, target) || !target.moderatable) return refuse(interaction, 'คุณหรือบอทมียศไม่สูงพอที่จะจัดการคนนี้');
       await target.timeout(null, auditReason(interaction));
-      await modLog(log, interaction, '⌛ ยกเลิกการหมดเวลา', target.user);
+      await modLog(log, interaction, '⌛ ยกเลิกการหมดเวลา', target.user, `${interaction.member} ยกเลิกการหมดเวลาของ ${target.user}`);
       return interaction.reply({ content: `⌛ ยกเลิกการหมดเวลาของ ${target.user.tag} แล้ว`, flags: MessageFlags.Ephemeral });
     },
   },
@@ -121,10 +123,10 @@ export const moderation = [
       if (!outranks(interaction.member, target)) return refuse(interaction, 'คุณมียศไม่สูงพอที่จะเปลี่ยนระดับของคนนี้');
       const result = await setLevel(interaction.member, target, interaction.options.getInteger('level'));
       if (!result) return refuse(interaction, 'คุณตั้งระดับเท่าหรือสูงกว่ายศของตัวเองไม่ได้');
-      await log('log-members', 'warn', '🎭 ตั้งระดับยศ', `${target} → **${result.name}**`, [], {
+      await log('log-members', 'warn', '🎭 ตั้งระดับยศ', `${interaction.member} ตั้งระดับยศของ ${target} เป็น ${result}`, [], {
         actor: interaction.member,
         thumbnail: target.displayAvatarURL({ size: 256 }),
-        footer: `ID: ${target.id}`,
+        footer: `ID ${target.id}`,
       });
       return interaction.reply({ content: `🎭 ตั้ง ${target.user.tag} เป็น ${result.name} แล้ว`, flags: MessageFlags.Ephemeral });
     },
