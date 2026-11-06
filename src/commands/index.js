@@ -1,5 +1,6 @@
 import { EmbedBuilder, InteractionContextType, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { general } from './general.js';
+import { levelCommands } from './levels.js';
 import { moderation } from './moderation.js';
 import { musicCommands } from './music.js';
 import { templateCommands } from './template.js';
@@ -7,6 +8,7 @@ import { ticketCommands } from './ticket.js';
 
 const CATEGORIES = [
   { title: '📌 ทั่วไป', commands: general },
+  { title: '⭐ เลเวล', commands: levelCommands },
   { title: '🎵 เพลง', commands: musicCommands },
   { title: '🎫 ทิกเก็ต', commands: ticketCommands },
   { title: '🛡️ ทีมงาน', commands: moderation },

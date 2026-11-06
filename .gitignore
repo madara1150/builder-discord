@@ -10,6 +10,7 @@ node_modules/
 channels.json
 everyone-backup.txt
 tickets.json
+levels.json
 
 # Logs
 *.log

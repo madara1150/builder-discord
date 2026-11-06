@@ -7,6 +7,7 @@ import { EVERYONE_PERMISSIONS, ROLE_LEVELS } from './layout.js';
 import { assignMissingLevel } from './roles.js';
 import { channels } from './store.js';
 import { TEMPLATES, findTemplate } from './templates.js';
+import { ensureTierRoles } from './xp.js';
 import { ensureTicketPanel } from './tickets.js';
 
 const EVERYONE_BACKUP_FILE = new URL('../everyone-backup.txt', import.meta.url);
@@ -96,6 +97,8 @@ async function run() {
 
     await guild.channels.fetch();
     await upsertRoles(guild);
+    const tierRoles = await ensureTierRoles(guild);
+    if (tierRoles) console.log(`สร้างยศเลเวล ${tierRoles} ยศ`);
     await guild.roles.fetch();
 
     const plan = planTemplate(guild, template, client.user.id);

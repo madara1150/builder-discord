@@ -40,6 +40,7 @@ const BOT = {
   channels: [
     { key: 'bot-notify', name: '🔔・แจ้งเตือนจากบอท', access: 'readonly', topic: 'บอทแจ้งสถานะและข่าวสารของเซิร์ฟเวอร์' },
     { key: 'bot-commands', name: '⌨️・ใช้คำสั่งบอท', access: 'public', topic: 'ห้องสำหรับพิมพ์คำสั่งบอท' },
+    { key: 'level-up', name: '🆙・เลเวลอัป', access: 'readonly', topic: 'แสดงความยินดีเมื่อสมาชิกเลเวลอัป พิมพ์ /rank เพื่อดูเลเวลของตัวเอง' },
   ],
 };
 

@@ -357,6 +357,174 @@ export async function renderWelcomeCard({ name, avatarURL, guildName, memberCoun
   return canvas.toBuffer('image/png');
 }
 
+// ---------- เลเวล ----------
+
+function drawProgressBar(ctx, x, y, width, height, ratio, from, to) {
+  roundRect(ctx, x, y, width, height, height / 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fill();
+  const filled = Math.max(height, width * Math.min(1, Math.max(0, ratio)));
+  const gradient = ctx.createLinearGradient(x, 0, x + width, 0);
+  gradient.addColorStop(0, from);
+  gradient.addColorStop(1, to);
+  roundRect(ctx, x, y, filled, height, height / 2);
+  ctx.fillStyle = gradient;
+  ctx.fill();
+}
+
+const number = (value) => value.toLocaleString('th-TH');
+
+// tier: { name, color } ของยศรางวัลปัจจุบัน หรือ null
+export async function renderRankCard({ name, avatarURL, level, current, needed, totalXp, rank, tier, messages, voiceMinutes }) {
+  const width = 1000;
+  const height = 320;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  const accent = tier?.color ?? THEME.blurple;
+
+  roundRect(ctx, 0, 0, width, height, 28);
+  ctx.fillStyle = THEME.panel;
+  ctx.fill();
+  ctx.save();
+  roundRect(ctx, 0, 0, width, height, 28);
+  ctx.clip();
+  const glow = ctx.createRadialGradient(160, 160, 20, 160, 160, 420);
+  glow.addColorStop(0, tint(accent, 0.35));
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+
+  const avatar = await fetchImage(avatarURL);
+  drawCircleImage(ctx, avatar, 50, 60, 200, name, { width: 7, color: accent });
+
+  const x = 300;
+  const barWidth = width - x - 50;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = THEME.text;
+  ctx.font = font(44, true);
+  ctx.fillText(ellipsis(ctx, name, barWidth - 230), x, 104);
+
+  ctx.textAlign = 'right';
+  ctx.font = font(22);
+  ctx.fillStyle = THEME.muted;
+  ctx.fillText('อันดับ', width - 50 - 110, 72);
+  ctx.fillText('เลเวล', width - 50, 72);
+  ctx.font = font(48, true);
+  ctx.fillStyle = THEME.text;
+  ctx.fillText(rank ? `#${rank}` : '-', width - 50 - 110, 120);
+  ctx.fillStyle = accent;
+  ctx.fillText(`${level}`, width - 50, 120);
+
+  if (tier) {
+    ctx.textAlign = 'left';
+    ctx.font = font(20, true);
+    const pill = clean(tier.name);
+    const pillWidth = ctx.measureText(pill).width + 32;
+    roundRect(ctx, x, 128, pillWidth, 36, 18);
+    ctx.fillStyle = tint(accent, 0.25);
+    ctx.fill();
+    ctx.fillStyle = THEME.text;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pill, x + 16, 147);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  const maxed = needed === 0;
+  drawProgressBar(ctx, x, 196, barWidth, 30, maxed ? 1 : current / needed, accent, '#eb459e');
+  ctx.textAlign = 'left';
+  ctx.font = font(20);
+  ctx.fillStyle = THEME.muted;
+  ctx.fillText(maxed ? 'เลเวลสูงสุดแล้ว 🏆' : `${number(current)} / ${number(needed)} EXP`, x, 258);
+  ctx.textAlign = 'right';
+  ctx.fillText(maxed ? '' : `อีก ${number(needed - current)} EXP ถึงเลเวล ${level + 1}`, width - 50, 258);
+
+  ctx.textAlign = 'left';
+  ctx.font = font(18);
+  ctx.fillStyle = THEME.faint;
+  ctx.fillText(clean(`EXP รวม ${number(totalXp)}  ·  💬 ${number(messages)} ข้อความ  ·  🎙️ ${number(voiceMinutes)} นาทีในห้องเสียง`), x, 294);
+
+  return canvas.toBuffer('image/png');
+}
+
+export async function renderLevelUpCard({ name, avatarURL, before, after, current, needed, tier }) {
+  const width = 1000;
+  const height = 300;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, '#f5a623');
+  gradient.addColorStop(0.5, '#eb459e');
+  gradient.addColorStop(1, '#5865f2');
+  roundRect(ctx, 0, 0, width, height, 28);
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // พลุกระดาษ
+  ctx.save();
+  roundRect(ctx, 0, 0, width, height, 28);
+  ctx.clip();
+  const colors = ['#ffffff', '#fee75c', '#57f287', '#ffb3d9', '#9bd1ff'];
+  for (let i = 0; i < 46; i++) {
+    const px = (i * 211) % width;
+    const py = (i * 97) % height;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate((i * 37) % 360);
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.globalAlpha = 0.35;
+    ctx.fillRect(-5, -2, 10, 4);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  const avatar = await fetchImage(avatarURL);
+  drawCircleImage(ctx, avatar, 54, 50, 200, name, { width: 8, color: 'rgba(255,255,255,0.95)' });
+
+  const x = 300;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.font = font(28, true);
+  ctx.fillText(clean('🎉 เลเวลอัป!'), x, 82);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = font(42, true);
+  ctx.fillText(ellipsis(ctx, name, width - x - 60), x, 134);
+
+  ctx.font = font(64, true);
+  const fromText = `${before}`;
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.fillText(fromText, x, 212);
+  const fromWidth = ctx.measureText(fromText).width;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('→', x + fromWidth + 20, 212);
+  const arrowWidth = ctx.measureText('→').width;
+  ctx.fillText(`${after}`, x + fromWidth + arrowWidth + 40, 212);
+
+  if (tier) {
+    ctx.font = font(22, true);
+    const label = clean(`ได้รับยศ ${tier.name}`);
+    const pillWidth = ctx.measureText(label).width + 36;
+    const pillX = width - 50 - pillWidth;
+    roundRect(ctx, pillX, 166, pillWidth, 44, 22);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, pillX + 18, 189);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  drawProgressBar(ctx, x, 236, width - x - 50, 18, needed ? current / needed : 1, '#ffffff', '#fee75c');
+  ctx.font = font(18);
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillText(needed ? `${number(current)} / ${number(needed)} EXP ถึงเลเวลถัดไป` : 'เลเวลสูงสุดแล้ว', x, 280);
+
+  return canvas.toBuffer('image/png');
+}
+
 // ---------- แบนเนอร์แผงทิกเก็ต ----------
 
 export function renderTicketBanner({ guildName }) {

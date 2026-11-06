@@ -7,6 +7,7 @@ import { leaveIfAlone } from './music.js';
 import { assignMissingLevel } from './roles.js';
 import { channels } from './store.js';
 import { ensureTicketPanel, handleTicketInteraction } from './tickets.js';
+import { ensureTierRoles, flushLevels, registerXp } from './xp.js';
 
 const client = new Client({
   intents: [
@@ -22,6 +23,7 @@ const client = new Client({
 
 const { send, log } = createLogger(client);
 registerLogEvents(client, { send, log });
+registerXp(client, { send });
 
 client.on(Events.VoiceStateUpdate, (before) => leaveIfAlone(before.channel));
 
@@ -51,11 +53,13 @@ client.once(Events.ClientReady, async () => {
   const { guild } = await client.channels.fetch(channels.welcome);
   await guild.commands.set([...commands.values()].map((command) => command.data.toJSON()));
   await ensureTicketPanel(client).catch((error) => console.error(`โพสต์แผงทิกเก็ตไม่สำเร็จ: ${error.message}`));
+  await ensureTierRoles(guild).catch((error) => console.error(`สร้างยศเลเวลไม่สำเร็จ: ${error.message}`));
   // เก็บตกคนที่เข้ามาตอนบอทปิดอยู่
   await assignMissingLevel(guild, 1).catch((error) => console.error(`แจกยศไม่สำเร็จ: ${error.message}`));
 });
 
 async function shutdown() {
+  flushLevels();
   await send('bot-notify', { embeds: [statusEmbed(false)] });
   await client.destroy();
   process.exit(0);
